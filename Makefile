@@ -1,5 +1,5 @@
 COMP=g++
-FLAGS=-Wall -g -std=c99 -I.
+FLAGS=-Wall -g -I.
 
 all: client
 
