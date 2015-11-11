@@ -16,24 +16,6 @@ using namespace std;
 #include "master.h"
 #include "helpers.h"
 
-int contact_master() {
-	int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-	if(socket_fd < 0) {
-		cout << "Error creating socket." << endl;
-		exit(1);
-	}
-	sockaddr_in master;
-	memset(&master, '0', sizeof(master));
-	master.sin_family = AF_INET;
-	master.sin_port = htons(MASTER_PORT);
-	inet_pton(AF_INET, MASTER_IP_ADDR, &(master.sin_addr));
-	if(connect(socket_fd, (sockaddr *)&master, sizeof(master)) < 0) {
-		printf("\n Error: Failed to connect to the directory service. \n");
-		exit(1);
-	}
-	return socket_fd;
-}
-
 int main() {
 	cout << "uiShell for tiny-Google\n--------------------------" << endl;
 	
@@ -78,7 +60,7 @@ int main() {
 			}
 			
 			// Set up socket with the master and write data
-			int socket_fd = contact_master();
+			int socket_fd = contact_node(MASTER_IP_ADDR, MASTER_PORT);
 			int procedure = 1;
 			if(patient_write(socket_fd, (void *)&procedure, sizeof(int)) < 0) {
 				cout << "Error writing procedure identifier to master." << endl;
@@ -105,7 +87,7 @@ int main() {
 			}
 			
 			// Set up socket with the master and write data
-			int socket_fd = contact_master();
+			int socket_fd = contact_node(MASTER_IP_ADDR, MASTER_PORT);
 			int procedure = 2;
 			if(patient_write(socket_fd, (void *)&procedure, sizeof(int)) < 0) {
 				cout << "Error writing procedure identifier to master." << endl;
