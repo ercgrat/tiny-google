@@ -59,32 +59,56 @@ int main() {
 			cout << "Enter the path to the document you wish to index:" << endl;
 			getline(cin, filepath_input);
 			char filepath[filepath_input.length() + 1];
+			memset(filepath + filepath_input.length(), 0, 1);
 			strncpy(filepath, filepath_input.c_str(), filepath_input.length());
 			
 			// Read the file
 			char *document;
-			ifstream input_file(filepath, ios::ate | ios::binary);
+			int doc_len;
+			ifstream input_file(filepath);
 			if(input_file.is_open()) {
-				input_file.ignore(numeric_limits<streamsize>::max());
-				int input_file_size = input_file.gcount();
-				input_file.clear();
-				input_file.seekg(0, ios_base::beg);
-				
-				document = new char[input_file_size];
-				while(!input_file.eof()) {
-					input_file >> document;
-				}
+				string doc_string((istreambuf_iterator<char>(input_file)), istreambuf_iterator<char>());
+				doc_len = doc_string.length();
+				document = new char[doc_len + 1];
+				memset(document + doc_len, 0, 1);
+				strncpy(document, doc_string.c_str(), doc_len);
 			} else {
 				cout << "Failed to open the specified file." << endl;
+				exit(1);
 			}
 			
 			// Set up socket with the master and write data
 			int socket_fd = contact_master();
-			//int procedure = 1;
-			//patient_write(socket_fd,(void *)&procedure, sizeof(int));
-			
+			int procedure = 1;
+			patient_write(socket_fd, (void *)&procedure, sizeof(int));
+			patient_write(socket_fd, (void *)document, doc_len);
 			close(socket_fd);
 		} else if(input == 2) { // Send a document search query
+			// Read in arguments
+			char *args[32];
+			cout << "Enter search terms line by line, then hit enter again to finish:" << endl;
+			int argc = 0;
+			while(argc < 32) {
+				string arg;
+				getline(cin, arg);
+				if(arg.length() == 0) {
+					break;
+				}
+				char *arg_arr = new char[arg.length() + 1];
+				memset(arg_arr + arg.length(), 0, 1);
+				args[argc] = arg_arr;
+				argc++;
+			}
+			
+			// Set up socket with the master and write data
+			int socket_fd = contact_master();
+			int procedure = 2;
+			patient_write(socket_fd, (void *)&procedure, sizeof(int));
+			patient_write(socket_fd, (void *)&argc, sizeof(int));
+			for(int i = 0; i < argc; i++) {
+				patient_write(socket_fd, (void *)args[i], strlen(args[i]));
+			}
+			close(socket_fd);
 		} else if(input == 3) {
 			cout << "Good bye!" << endl;
 			break;
