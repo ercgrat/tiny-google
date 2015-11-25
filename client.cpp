@@ -55,9 +55,11 @@ int main() {
 				memset(document + doc_len, 0, 1);
 				strncpy(document, doc_string.c_str(), doc_len);
 			} else {
+				input_file.close();
 				cout << "Failed to open the specified file." << endl;
 				exit(1);
 			}
+			input_file.close();
 			
 			// Set up socket with the master and write data
 			int socket_fd = contact_node(MASTER_IP_ADDR, MASTER_PORT);
@@ -68,6 +70,7 @@ int main() {
 			if(patient_write(socket_fd, (void *)document, doc_len) < 0) {
 				cout << "Error writing file to master." << endl;
 			}
+			delete[] document;
 			close(socket_fd);
 		} else if(input == 2) { // Send a document search query
 			// Read in arguments
@@ -91,14 +94,19 @@ int main() {
 			int procedure = 2;
 			if(patient_write(socket_fd, (void *)&procedure, sizeof(int)) < 0) {
 				cout << "Error writing procedure identifier to master." << endl;
-			}
-			if(patient_write(socket_fd, (void *)&argc, sizeof(int)) < 0) {
-				cout << "Error writing argument count to master." << endl;
+			} else {
+				if(patient_write(socket_fd, (void *)&argc, sizeof(int)) < 0) {
+					cout << "Error writing argument count to master." << endl;
+				} else {
+					for(int i = 0; i < argc; i++) {
+						if(patient_write(socket_fd, (void *)args[i], strlen(args[i])) < 0) {
+							cout << "Error writing argument " << i << " to master." << endl;
+						}
+					}
+				}
 			}
 			for(int i = 0; i < argc; i++) {
-				if(patient_write(socket_fd, (void *)args[i], strlen(args[i])) < 0) {
-					cout << "Error writing argument " << i << " to master." << endl;
-				}
+				delete[] args[i];
 			}
 			close(socket_fd);
 		} else if(input == 3) {
