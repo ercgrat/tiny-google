@@ -62,13 +62,17 @@ int main() {
 			input_file.close();
 			
 			// Set up socket with the master and write data
-			int socket_fd = contact_node(MASTER_IP_ADDR, MASTER_PORT);
+			int socket_fd = create_socket();
+			contact_node(socket_fd, MASTER_IP_ADDR, MASTER_PORT);
 			int procedure = 1;
 			if(patient_write(socket_fd, (void *)&procedure, sizeof(int)) < 0) {
 				cout << "Error writing procedure identifier to master." << endl;
 			}
+			if(patient_write(socket_fd, (void *)&doc_len, sizeof(int)) < 0) {
+				cout << "Error writing document length to master." << endl;
+			}
 			if(patient_write(socket_fd, (void *)document, doc_len) < 0) {
-				cout << "Error writing file to master." << endl;
+				cout << "Error writing document to master." << endl;
 			}
 			delete[] document;
 			close(socket_fd);
@@ -90,7 +94,8 @@ int main() {
 			}
 			
 			// Set up socket with the master and write data
-			int socket_fd = contact_node(MASTER_IP_ADDR, MASTER_PORT);
+			int socket_fd = create_socket();
+			contact_node(socket_fd, MASTER_IP_ADDR, MASTER_PORT);
 			int procedure = 2;
 			if(patient_write(socket_fd, (void *)&procedure, sizeof(int)) < 0) {
 				cout << "Error writing procedure identifier to master." << endl;

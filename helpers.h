@@ -1,11 +1,15 @@
 // helpers.h
 
-int contact_node(const char *ip_addr, int port) {
+int create_socket() {
 	int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
 	if(socket_fd < 0) {
 		cout << "Error creating socket." << endl;
 		exit(1);
 	}
+	return socket_fd;
+}
+
+void contact_node(int socket_fd, const char *ip_addr, int port) {
 	sockaddr_in node;
 	memset(&node, '0', sizeof(node));
 	node.sin_family = AF_INET;
@@ -15,7 +19,26 @@ int contact_node(const char *ip_addr, int port) {
 		printf("\nError: Failed to connect to node: { ip_addr:%s, port:%d }\n", ip_addr, port);
 		exit(1);
 	}
-	return socket_fd;
+}
+
+void listen_on_port(int socket_fd, int port) {
+	sockaddr_in sockaddr;
+	memset(&sockaddr, '0', sizeof(sockaddr));
+	sockaddr.sin_family = AF_INET;
+	sockaddr.sin_port = htons(port);
+	sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	
+	if(bind(socket_fd, (struct sockaddr*)&sockaddr, sizeof(sockaddr)) < 0) {
+		printf("Error binding socket to port %d.\n", port);
+		exit(1);
+	}
+	listen(socket_fd, 100);
+}
+
+int accept_client(int socket_fd, sockaddr_in *client_addr) {
+	socklen_t client_len = sizeof(sockaddr_in);
+	int client_fd = accept(socket_fd, (struct sockaddr*)client_addr, &client_len);
+	return client_fd;
 }
 
 int patient_write(int socket_fd, void *data, int data_size) {

@@ -9,3 +9,5 @@ struct term_node {
 	freq_node *list;
 	term_node *next;
 };
+
+term_node* index_document(char *document);
