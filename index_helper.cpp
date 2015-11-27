@@ -36,7 +36,11 @@ int main(int argc, char *argv[]) {
 	request->service = 0; // 0 indicates indexing instead of searching
 	
 	int outgoing = create_socket();
-	contact_node(outgoing, MASTER_IP_ADDR, MASTER_PORT);
+	if(contact_node(outgoing, MASTER_IP_ADDR, MASTER_PORT) < 0) {
+		cout << "Failed to connect to the master node." << endl;
+		close(outgoing);
+		exit(1);
+	}
 	if(patient_write(outgoing, (void *)&procedure, sizeof(int)) < 0) {
 		exit_program(outgoing, "Error writing procedure id 3 to the master node.");
 	}
@@ -55,6 +59,12 @@ int main(int argc, char *argv[]) {
 		int doc_len;
 		if(patient_read(client, (void *)&doc_len, sizeof(int)) < 0) {
 			exit_program(client, "Error reading document length from master indexer.");
+		}
+		
+		// Ping from master node - ignore it
+		if(doc_len == -1) {
+			close(client);
+			continue;
 		}
 		
 		char *document = new char[doc_len + 1];

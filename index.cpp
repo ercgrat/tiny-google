@@ -2,6 +2,7 @@ using namespace std;
 #include <iostream>
 #include <cstdlib>
 #include <cstring>
+
 #include "index.h"
 
 freq_node* find_freq_node(term_node **head, char *term) { // Searches for node with term, or creates one
@@ -29,7 +30,7 @@ freq_node* find_freq_node(term_node **head, char *term) { // Searches for node w
 		
 		if(strcmp(current->term, term) == 0) { // Found a node that already has the term
 			return current->list;
-		} else if(strcmp(current->term, term) < 0) {
+		} else if(strcmp(current->term, term) > 0) {
 			if(previous) { // Term is < current term, append new node to previous
 				previous->next = new term_node;
 				previous->next->term = new char[strlen(term) + 1];
@@ -88,4 +89,81 @@ term_node* index_document(char *document) {
 	}
 	
 	return head;
+}
+
+void merge_partial_index(term_node **master, term_node *partial) {
+	
+	// If master does not exist, assign the partial as the master
+	if(!(*master)) {
+		*master = partial;
+		return;
+	}
+	
+	term_node *parent = NULL;
+	term_node *current = *master;
+	term_node *node_to_add = partial;
+	
+	while(node_to_add != NULL) {
+		// Term already in the index, delete the partial index term node (node_to_add) and insert its frequency node
+		if(strcmp(current->term, node_to_add->term) == 0) {
+			freq_node *current_freq = current->list;
+			freq_node *freq_to_add = node_to_add->list;
+			term_node *temp_node_to_add = node_to_add->next;
+			delete node_to_add;
+			node_to_add = temp_node_to_add;
+			
+			// Frequency being added is greatest, just set as head of freq_node list
+			if(freq_to_add->count > current_freq->count) {
+				current->list = freq_to_add;
+				freq_to_add->next = current_freq;
+			} else { // Search for the correct position of the frequency node
+				freq_node *parent_freq = current_freq;
+				current_freq = current_freq->next;
+				while(1) {
+					if(!current_freq) {
+						parent_freq->next = freq_to_add;
+						break;
+					} else if(freq_to_add->count > current_freq->count) {
+						parent_freq->next = freq_to_add;
+						freq_to_add->next = current_freq;
+						break;
+					} else {
+						parent_freq = current_freq;
+						current_freq = current_freq->next;
+					}
+				}
+			}
+		} else if(strcmp(current->term, node_to_add->term) > 0) { // Term being added not in the index yet, found the correct position for it
+			if(parent) {
+				parent->next = node_to_add;
+				node_to_add = node_to_add->next;
+				parent->next->next = current;
+			} else {
+				*master = node_to_add;
+				node_to_add = node_to_add->next;
+				parent = *master;
+				(*master)->next = current;
+			}
+		} else if(current->next == NULL) { // Reached end of the list, just append the remaining nodes from the partial index
+			current->next = node_to_add;
+			return;
+		} else { // Have not found the right alphabetical position or matching term yet
+			parent = current;
+			current = current->next;
+		}
+	}
+}
+
+void print_index(term_node *master) {
+	term_node *current = master;
+	while(current != NULL) {
+		freq_node *current_freq = current->list;
+		cout << current->term << ": ";
+		while(current_freq != NULL) {
+			cout << "(" << current_freq->doc_id << ", " << current_freq->count << ")~> ";
+			current_freq = current_freq->next;
+		}
+		cout << endl;
+		current = current->next;
+	}
 }

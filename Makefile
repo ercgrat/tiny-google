@@ -1,5 +1,5 @@
 COMP=g++
-FLAGS=-Wall -g -I.
+FLAGS=-Wall -std=c++11 -g -I.
 
 all: client index master index_helper
 

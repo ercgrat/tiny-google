@@ -11,3 +11,5 @@ struct term_node {
 };
 
 term_node* index_document(char *document);
+void merge_partial_index(term_node **master, term_node *partial);
+void print_index(term_node *master);

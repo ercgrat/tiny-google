@@ -24,3 +24,7 @@ struct index_thread_data {
 	int doc_id;
 	helper_entry *helper;
 };
+
+struct search_thread_data {
+	int client_fd;
+};

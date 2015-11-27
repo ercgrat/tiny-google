@@ -9,16 +9,13 @@ int create_socket() {
 	return socket_fd;
 }
 
-void contact_node(int socket_fd, const char *ip_addr, int port) {
+int contact_node(int socket_fd, const char *ip_addr, int port) {
 	sockaddr_in node;
 	memset(&node, '0', sizeof(node));
 	node.sin_family = AF_INET;
 	node.sin_port = htons(port);
 	inet_pton(AF_INET, ip_addr, &(node.sin_addr));
-	if(connect(socket_fd, (sockaddr *)&node, sizeof(node)) < 0) {
-		printf("\nError: Failed to connect to node: { ip_addr:%s, port:%d }\n", ip_addr, port);
-		exit(1);
-	}
+	return connect(socket_fd, (sockaddr *)&node, sizeof(node));
 }
 
 void listen_on_port(int socket_fd, int port) {
