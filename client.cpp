@@ -104,42 +104,43 @@ int main() {
 				args[argc] = arg_arr;
 				argc++;
 			}
+			cout << "Argc was " << argc << endl;
 			
-			// Set up socket with the master and write data
+			// Set up connection with the master
 			int socket_fd = create_socket();
 			if(contact_node(socket_fd, MASTER_IP_ADDR, MASTER_PORT) < 0) {
 				cout << "Failed to connect to the master node." << endl;
 				close(socket_fd);
 				exit(1);
 			}
+			cout << "Contacted master node." << endl;
+			// Write request data to the master
 			int procedure = 2;
 			if(patient_write(socket_fd, (void *)&procedure, sizeof(int)) < 0) {
 				cout << "Error writing procedure identifier to master." << endl;
-			} else {
-				//if(patient_write(socket_fd, (void *)&argc, sizeof(int)) < 0) {
-				//	cout << "Error writing argument count to master." << endl;
-				//} else {
-					//for(int i = 0; i < argc; i++) {
-					for(int i = 0; i < 1; i++) {
-						int term_len = strlen(args[i]);
-						if(patient_write(socket_fd, (void *)&term_len, sizeof(int)) < 0) {
-							cout << "Error writing argument " << i << " to master." << endl;
-						}
-						if(patient_write(socket_fd, (void *)args[i], term_len) < 0) {
-							cout << "Error writing argument " << i << " to master." << endl;
-						}
-					}
-				//}
+				exit(1);
+			}
+			if(patient_write(socket_fd, (void *)&argc, sizeof(int)) < 0) {
+				cout << "Error writing argument count to master." << endl;
+				exit(1);
 			}
 			for(int i = 0; i < argc; i++) {
-				delete[] args[i];
+				int term_len = strlen(args[i]);
+				if(patient_write(socket_fd, (void *)&term_len, sizeof(int)) < 0) {
+					cout << "Error writing argument " << i << " to master." << endl;
+				}
+				if(patient_write(socket_fd, (void *)args[i], term_len) < 0) {
+					cout << "Error writing argument " << i << " to master." << endl;
+				}
 			}
 			
+			// Read response data from the master
 			int document_count;
 			if(patient_read(socket_fd, (void *)&document_count, sizeof(int)) < 0) {
 				cout << "Error reading document count from master." << endl;
 				exit(1);
 			}
+			cout << "Document count from master was " << document_count << endl;
 			
 			for(int i = 0; i < document_count; i++) {
 				int doc_name_len;
@@ -153,13 +154,24 @@ int main() {
 					cout << "Error reading document name " << i << " from master." << endl;
 					exit(1);
 				}
-				int frequency;
-				if(patient_read(socket_fd, (void *)&frequency, sizeof(int)) < 0) {
-					cout << "Error reading frequency " << i << " from master." << endl;
+				cout << doc_name << ":" << endl;
+				delete[] doc_name;
+				
+				// Term counts array is padded in the front by one integer - ignore it
+				int *term_counts = new int[argc + 1];
+				if(patient_read(socket_fd, (void *)term_counts, sizeof(int)*(argc + 1)) < 0) {
+					cout << "Error reading term counts from master." << endl;
 					exit(1);
 				}
-				
-				cout << doc_name << ": " << frequency << " occurrences." << endl;
+				for(int term = 0; term < argc; term++) {
+					cout << "\t\"" << args[term] << "\": " << term_counts[term + 1] << endl;
+				}
+				delete[] term_counts;
+			}
+			
+			// Clean up memory
+			for(int i = 0; i < argc; i++) {
+				delete[] args[i];
 			}
 			
 			close(socket_fd);

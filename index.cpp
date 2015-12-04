@@ -109,6 +109,7 @@ void merge_partial_index(term_node **master, term_node *partial) {
 			freq_node *current_freq = current->list;
 			freq_node *freq_to_add = node_to_add->list;
 			term_node *temp_node_to_add = node_to_add->next;
+			delete node_to_add->term;
 			delete node_to_add;
 			node_to_add = temp_node_to_add;
 			
@@ -166,4 +167,15 @@ void print_index(term_node *master) {
 		cout << endl;
 		current = current->next;
 	}
+}
+
+term_node *find_term_node(term_node *master, char *term) {
+	term_node *current = master;
+	while(current != NULL) {
+		if(strcmp(current->term, term) == 0) {
+			return current;
+		}
+		current = current->next;
+	}
+	return NULL;
 }

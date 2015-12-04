@@ -43,7 +43,6 @@ void *thread_routine_index(void *input) {
 	char *doc_name = new char[doc_name_len + 1];
 	memset(doc_name, 0, doc_name_len + 1);
 	if(patient_read(data->client_fd, (void *)doc_name, doc_name_len) < 0) {
-		delete[] doc_name;
 		close(data->client_fd);
 		cout << "Error reading document from client." << endl;
 		pthread_exit(NULL);
@@ -155,80 +154,189 @@ void *thread_routine_index(void *input) {
 void *thread_routine_search(void *input) {
 	search_thread_data *data = (search_thread_data *)input;
 	
-	int search_term_len;
-	if(patient_read(data->client_fd, (void *)&search_term_len, sizeof(int)) < 0) {
+	// Read search term count from client
+	int search_term_count = 0;
+	if(patient_read(data->client_fd, (void *)&search_term_count, sizeof(int)) < 0) {
 		close(data->client_fd);
-		cout << "Error reading search term length from client." << endl;
-		pthread_exit(NULL);
-	}
-	char *search_term = new char[search_term_len + 1];
-	memset(search_term, 0, search_term_len + 1);
-	if(patient_read(data->client_fd, (void *)search_term, search_term_len) < 0) {
-		delete[] search_term;
-		close(data->client_fd);
-		cout << "Error reading document from client." << endl;
+		cout << "Error reading search term count from client." << endl;
 		pthread_exit(NULL);
 	}
 	
-	master_index_lock.lock();
-	term_node *current = master_index;
-	while(current != NULL) {
-		if(strcmp(current->term, search_term) == 0) {
-			int num_docs = 0;
-			freq_node *current_freq = current->list;
-			while(current_freq != NULL) {
-				num_docs++;
-				current_freq = current_freq->next;
-			}
-			
-			if(patient_write(data->client_fd, (void *)&num_docs, sizeof(int)) < 0) {
-				delete[] search_term;
-				close(data->client_fd);
-				cout << "Error writing document count to the client." << endl;
-				pthread_exit(NULL);
-			}
-			
-			current_freq = current->list;
-			while(current_freq != NULL) {
-				char *doc_name = document_names[current_freq->doc_id];
-				int doc_name_len = strlen(doc_name);
-				int count = current_freq->count;
-				if(patient_write(data->client_fd, (void *)&doc_name_len, sizeof(int)) < 0) {
-					delete[] search_term;
-					close(data->client_fd);
-					cout << "Error writing document name length to the client." << endl;
-					pthread_exit(NULL);
-				}
-				if(patient_write(data->client_fd, (void *)doc_name, doc_name_len) < 0) {
-					delete[] search_term;
-					close(data->client_fd);
-					cout << "Error writing document name to the client." << endl;
-					pthread_exit(NULL);
-				}
-				if(patient_write(data->client_fd, (void *)&count, sizeof(int)) < 0) {
-					delete[] search_term;
-					close(data->client_fd);
-					cout << "Error writing term frequency to the client." << endl;
-					pthread_exit(NULL);
-				}
-				current_freq = current_freq->next;
-			}
-			break;
-		} else {
-			current = current->next;
-		}
-	}
-	master_index_lock.unlock();
-	delete[] search_term;
-	
-	if(!current) {
-		int doc_count = 0;
-		if(patient_write(data->client_fd, (void *)&doc_count, sizeof(int)) < 0) {
+	// Read each search term length and then the term
+	char **terms = new char *[search_term_count];
+	for(int i = 0; i < search_term_count; i++) {
+		int search_term_len;
+		if(patient_read(data->client_fd, (void *)&search_term_len, sizeof(int)) < 0) {
 			close(data->client_fd);
-			cout << "Error writing zero document count to client." << endl;
+			cout << "Error reading search term length " << i << " from client." << endl;
+			pthread_exit(NULL);
+		}
+		terms[i] = new char[search_term_len + 1];
+		memset(terms[i], 0, search_term_len + 1);
+		if(patient_read(data->client_fd, (void *)terms[i], search_term_len) < 0) {
+			close(data->client_fd);
+			cout << "Error reading search term " << i << " from client." << endl;
 			pthread_exit(NULL);
 		}
 	}
+	
+	// Acquire lock on the master index
+	master_index_lock.lock();
+	
+	// Use first search term to identify a maximum set of documents that match all terms (since it's an intersection)
+	term_node *first_term_node = find_term_node(master_index, terms[0]);
+	if(first_term_node != NULL) { // No documents match all terms
+		cout << "Found a term node for the first term." << endl;
+		freq_node *current_freq = first_term_node->list;
+		int document_count = 0;
+		while(current_freq != NULL) {
+			document_count++;
+			current_freq = current_freq->next;
+		}
+		cout << "Document count recorded on master is " << document_count << endl;
+		
+		// Create structure for matching document info
+		int **matching_documents = new int *[document_count];
+		current_freq = first_term_node->list;
+		for(int i = 0; i < document_count; i++) {
+			matching_documents[i] = new int[search_term_count + 1]; // array where 0 = doc_id, 1 : end = term counts
+			// Initialize values
+			matching_documents[i][0] = current_freq->doc_id;
+			for(int j = 1; j < search_term_count + 1; j++) {
+				matching_documents[i][j] = 0;
+			}
+			current_freq = current_freq->next;
+		}
+	
+		// For each term, find the matching term node, then check all documents against the existing list
+		for(int i = 0; i < search_term_count; i++) {
+			cout << "Searching index for term " << terms[i] << endl;
+			term_node *node = find_term_node(master_index, terms[i]);
+			if(node == NULL) {
+				cout << "The term matched no documents - break" << endl;
+				break; // There will be no matched documents if the search term is not in the index
+			}
+			freq_node *freq = node->list;
+			while(freq != NULL) {
+				// See if the doc_id matches a document in the existing list
+				for(int doc = 0; doc < document_count; doc++) {
+					// It matches, so put the count in the matrix
+					if(matching_documents[doc][0] == freq->doc_id) {
+						cout << "Found matching doc_id in existing list for term " << terms[i] << ", recording " << freq->count << " at index " << i + 1 << endl;
+						matching_documents[doc][i + 1] = freq->count;
+						break;
+					}
+				}
+				freq = freq->next;
+			}
+		}
+		
+		// Release master index lock
+		master_index_lock.unlock();
+		
+		// Sum up totals for any documents that matched all terms
+		int *totals = new int[document_count];
+		for(int doc = 0; doc < document_count; doc++) {
+			totals[doc] = 0;
+			for(int term = 0; term < search_term_count; term++) {
+				if(matching_documents[doc][term + 1] == 0) {
+					cout << "Count for term " << term << " / " << terms[term] << " was 0, setting total to -1" << endl;
+					totals[doc] = -1;
+					break;
+				} else {
+					cout << "Adding " << matching_documents[doc][term + 1] << " to total for doc " << doc << endl;
+					totals[doc] += matching_documents[doc][term + 1];
+				}
+			}
+		}
+		
+		// Insertion-sort the results
+		int *sorted_totals = new int[document_count];
+		int **sorted_docs = new int *[document_count];
+		for(int i = 0; i < document_count; i++) {
+			cout << "Total for document " << i << " is " << totals[i] << endl;
+			for(int j = i; j >= 0; j--) {
+				if(j == 0) {
+					sorted_totals[j] = totals[i];
+					sorted_docs[j] = matching_documents[i];
+				} else {
+					if(totals[i] > sorted_totals[j-1]) {
+						sorted_totals[j] = sorted_totals[j-1];
+						sorted_docs[j] = sorted_docs[j-1];
+					} else {
+						sorted_totals[j] = totals[i];
+						sorted_docs[j] = matching_documents[i];
+						break;
+					}
+				}
+			}
+		}
+		
+		// Count matching documents
+		int num_docs_matched = 0;
+		for(int i = 0; i < document_count; i++) {
+			if(sorted_totals[i] < 0) {
+				break;
+			}
+			cout << "Sorted total " << i << " is " << sorted_totals[i] << endl;
+			num_docs_matched++;
+		}
+		
+		// Write document count
+		if(patient_write(data->client_fd, (void *)&num_docs_matched, sizeof(int)) < 0) {
+			close(data->client_fd);
+			cout << "Error writing matched document count to the client." << endl;
+			pthread_exit(NULL);
+		}
+		
+		// For each document, write name length, name, and array of counts for each term
+		for(int i = 0; i < num_docs_matched; i++) {
+			char *doc_name = document_names[sorted_docs[i][0]];
+			int doc_name_len = strlen(doc_name);
+			if(patient_write(data->client_fd, (void *)&doc_name_len, sizeof(int)) < 0) {
+				close(data->client_fd);
+				cout << "Error writing document name length to the client." << endl;
+				pthread_exit(NULL);
+			}
+			if(patient_write(data->client_fd, (void *)doc_name, doc_name_len) < 0) {
+				close(data->client_fd);
+				cout << "Error writing document name to the client." << endl;
+				pthread_exit(NULL);
+			}
+			if(patient_write(data->client_fd, (void *)(sorted_docs[i]), sizeof(int)*(search_term_count+1)) < 0) {
+				close(data->client_fd);
+				cout << "Error writing term frequencies for document " << i << " to the client." << endl;
+				pthread_exit(NULL);
+			}
+		}
+		
+		// Clean up memory
+		delete[] totals;
+		delete[] sorted_totals;
+		for(int i = 0; i < document_count; i++) {
+			delete[] matching_documents[i];
+		}
+		delete[] matching_documents;
+		delete[] sorted_docs;
+	} else {
+		cout << "Found zero documents on the master." << endl;
+		// Write zero document count
+		int num_docs_matched = 0;
+		if(patient_write(data->client_fd, (void *)&num_docs_matched, sizeof(int)) < 0) {
+			close(data->client_fd);
+			cout << "Error writing zero document count to the client." << endl;
+			pthread_exit(NULL);
+		}
+		
+		// Release master index lock
+		master_index_lock.unlock();
+	}
+	
+	// Clean up memory
+	for(int i = 0; i < search_term_count; i++) {
+		delete[] terms[i];
+	}
+	delete[] terms;
 	
 	close(data->client_fd);
 	delete data;
@@ -311,34 +419,35 @@ int main() {
 				delete request;
 				delete entry;
 				close(client);
-				exit(1);
-			}
-			
-			helper_node **list_head = NULL;
-			helper_node **last_list_node = NULL;
-			if(request->service == 0) { // Indexing, create new node
-				list_head = &indexers;
-				last_list_node = &last_indexer;
-			} else { // Searching, create new node
-				list_head = &searchers;
-				last_list_node = &last_searcher;
-			}
-			
-			if(!(*list_head)) {
-				(*list_head) = new helper_node;
-				(*list_head)->entry = entry;
-				(*list_head)->next = NULL;
-				(*list_head)->previous = NULL;
-				(*last_list_node) = (*list_head);
+				
 			} else {
-				helper_node *new_head = new helper_node;
-				new_head->next = (*list_head);
-				new_head->entry = entry;
-				(*list_head) = new_head;
+				helper_node **list_head = NULL;
+				helper_node **last_list_node = NULL;
+				if(request->service == 0) { // Indexing, create new node
+					list_head = &indexers;
+					last_list_node = &last_indexer;
+				} else { // Searching, create new node
+					list_head = &searchers;
+					last_list_node = &last_searcher;
+				}
+				
+				// Add node to front of list or create new list
+				if(!(*list_head)) {
+					(*list_head) = new helper_node;
+					(*list_head)->entry = entry;
+					(*list_head)->next = NULL;
+					(*list_head)->previous = NULL;
+					(*last_list_node) = (*list_head);
+				} else {
+					helper_node *new_head = new helper_node;
+					new_head->next = (*list_head);
+					new_head->entry = entry;
+					(*list_head) = new_head;
+				}
+				inet_ntop(AF_INET, &(client_addr.sin_addr), entry->ip_addr, INET_ADDRSTRLEN);
+				entry->port = request->port;
+				delete request;
 			}
-			inet_ntop(AF_INET, &(client_addr.sin_addr), entry->ip_addr, INET_ADDRSTRLEN);
-			entry->port = request->port;
-			delete request;
 		}
 	}
 }
