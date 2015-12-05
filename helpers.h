@@ -19,13 +19,13 @@ int contact_node(int socket_fd, const char *ip_addr, int port) {
 }
 
 void listen_on_port(int socket_fd, int port) {
-	sockaddr_in sockaddr;
-	memset(&sockaddr, '0', sizeof(sockaddr));
-	sockaddr.sin_family = AF_INET;
-	sockaddr.sin_port = htons(port);
-	sockaddr.sin_addr.s_addr = htonl(INADDR_ANY);
+	sockaddr_in sock_addr;
+	memset(&sock_addr, '0', sizeof(sock_addr));
+	sock_addr.sin_family = AF_INET;
+	sock_addr.sin_port = htons(port);
+	sock_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	
-	if(bind(socket_fd, (struct sockaddr*)&sockaddr, sizeof(sockaddr)) < 0) {
+	if(::bind(socket_fd, (struct sockaddr*)&sock_addr, sizeof(sock_addr)) < 0) {
 		printf("Error binding socket to port %d.\n", port);
 		exit(1);
 	}
