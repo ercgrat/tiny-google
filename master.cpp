@@ -30,7 +30,6 @@ helper_node *searchers = NULL;
 helper_node *last_searcher = NULL;
 
 void *thread_routine_index(void *input) {
-	cout << "Spawned indexing master thread." << endl;
 	index_thread_data *data = (index_thread_data *)input;
 	
 	// Read document from the client
@@ -186,14 +185,12 @@ void *thread_routine_search(void *input) {
 	// Use first search term to identify a maximum set of documents that match all terms (since it's an intersection)
 	term_node *first_term_node = find_term_node(master_index, terms[0]);
 	if(first_term_node != NULL) { // No documents match all terms
-		cout << "Found a term node for the first term." << endl;
 		freq_node *current_freq = first_term_node->list;
 		int document_count = 0;
 		while(current_freq != NULL) {
 			document_count++;
 			current_freq = current_freq->next;
 		}
-		cout << "Document count recorded on master is " << document_count << endl;
 		
 		// Create structure for matching document info
 		int **matching_documents = new int *[document_count];
@@ -210,10 +207,8 @@ void *thread_routine_search(void *input) {
 	
 		// For each term, find the matching term node, then check all documents against the existing list
 		for(int i = 0; i < search_term_count; i++) {
-			cout << "Searching index for term " << terms[i] << endl;
 			term_node *node = find_term_node(master_index, terms[i]);
 			if(node == NULL) {
-				cout << "The term matched no documents - break" << endl;
 				break; // There will be no matched documents if the search term is not in the index
 			}
 			freq_node *freq = node->list;
@@ -222,7 +217,6 @@ void *thread_routine_search(void *input) {
 				for(int doc = 0; doc < document_count; doc++) {
 					// It matches, so put the count in the matrix
 					if(matching_documents[doc][0] == freq->doc_id) {
-						cout << "Found matching doc_id in existing list for term " << terms[i] << ", recording " << freq->count << " at index " << i + 1 << endl;
 						matching_documents[doc][i + 1] = freq->count;
 						break;
 					}
@@ -240,11 +234,9 @@ void *thread_routine_search(void *input) {
 			totals[doc] = 0;
 			for(int term = 0; term < search_term_count; term++) {
 				if(matching_documents[doc][term + 1] == 0) {
-					cout << "Count for term " << term << " / " << terms[term] << " was 0, setting total to -1" << endl;
 					totals[doc] = -1;
 					break;
 				} else {
-					cout << "Adding " << matching_documents[doc][term + 1] << " to total for doc " << doc << endl;
 					totals[doc] += matching_documents[doc][term + 1];
 				}
 			}
@@ -254,7 +246,6 @@ void *thread_routine_search(void *input) {
 		int *sorted_totals = new int[document_count];
 		int **sorted_docs = new int *[document_count];
 		for(int i = 0; i < document_count; i++) {
-			cout << "Total for document " << i << " is " << totals[i] << endl;
 			for(int j = i; j >= 0; j--) {
 				if(j == 0) {
 					sorted_totals[j] = totals[i];
@@ -278,7 +269,6 @@ void *thread_routine_search(void *input) {
 			if(sorted_totals[i] < 0) {
 				break;
 			}
-			cout << "Sorted total " << i << " is " << sorted_totals[i] << endl;
 			num_docs_matched++;
 		}
 		
@@ -319,7 +309,6 @@ void *thread_routine_search(void *input) {
 		delete[] matching_documents;
 		delete[] sorted_docs;
 	} else {
-		cout << "Found zero documents on the master." << endl;
 		// Write zero document count
 		int num_docs_matched = 0;
 		if(patient_write(data->client_fd, (void *)&num_docs_matched, sizeof(int)) < 0) {

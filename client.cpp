@@ -48,45 +48,45 @@ int main() {
 			char *document;
 			int doc_len;
 			ifstream input_file(filepath);
+			
 			if(input_file.is_open()) {
 				string doc_string((istreambuf_iterator<char>(input_file)), istreambuf_iterator<char>());
 				doc_len = doc_string.length();
 				document = new char[doc_len + 1];
 				memset(document + doc_len, 0, 1);
 				strncpy(document, doc_string.c_str(), doc_len);
+				input_file.close();
+				
+				// Set up socket with the master and write data
+				int socket_fd = create_socket();
+				if(contact_node(socket_fd, MASTER_IP_ADDR, MASTER_PORT) < 0) {
+					cout << "Failed to connect to the master node." << endl;
+					close(socket_fd);
+					exit(1);
+				}
+				int procedure = 1;
+				if(patient_write(socket_fd, (void *)&procedure, sizeof(int)) < 0) {
+					cout << "Error writing procedure identifier to master." << endl;
+				}
+				int filepath_len = strlen(filepath);
+				if(patient_write(socket_fd, (void *)&filepath_len, sizeof(int)) < 0) {
+					cout << "Error writing filepath length to master." << endl;
+				}
+				if(patient_write(socket_fd, (void *)filepath, filepath_len) < 0) {
+					cout << "Error writing filepath to master." << endl;
+				}
+				if(patient_write(socket_fd, (void *)&doc_len, sizeof(int)) < 0) {
+					cout << "Error writing document length to master." << endl;
+				}
+				if(patient_write(socket_fd, (void *)document, doc_len) < 0) {
+					cout << "Error writing document to master." << endl;
+				}
+				delete[] document;
+				close(socket_fd);
 			} else {
 				input_file.close();
 				cout << "Failed to open the specified file." << endl;
-				exit(1);
 			}
-			input_file.close();
-			
-			// Set up socket with the master and write data
-			int socket_fd = create_socket();
-			if(contact_node(socket_fd, MASTER_IP_ADDR, MASTER_PORT) < 0) {
-				cout << "Failed to connect to the master node." << endl;
-				close(socket_fd);
-				exit(1);
-			}
-			int procedure = 1;
-			if(patient_write(socket_fd, (void *)&procedure, sizeof(int)) < 0) {
-				cout << "Error writing procedure identifier to master." << endl;
-			}
-			int filepath_len = strlen(filepath);
-			if(patient_write(socket_fd, (void *)&filepath_len, sizeof(int)) < 0) {
-				cout << "Error writing filepath length to master." << endl;
-			}
-			if(patient_write(socket_fd, (void *)filepath, filepath_len) < 0) {
-				cout << "Error writing filepath to master." << endl;
-			}
-			if(patient_write(socket_fd, (void *)&doc_len, sizeof(int)) < 0) {
-				cout << "Error writing document length to master." << endl;
-			}
-			if(patient_write(socket_fd, (void *)document, doc_len) < 0) {
-				cout << "Error writing document to master." << endl;
-			}
-			delete[] document;
-			close(socket_fd);
 		} else if(input == 2) { // Send a document search query
 			// Read in arguments
 			char *args[32];
@@ -104,7 +104,6 @@ int main() {
 				args[argc] = arg_arr;
 				argc++;
 			}
-			cout << "Argc was " << argc << endl;
 			
 			// Set up connection with the master
 			int socket_fd = create_socket();
@@ -113,7 +112,7 @@ int main() {
 				close(socket_fd);
 				exit(1);
 			}
-			cout << "Contacted master node." << endl;
+			
 			// Write request data to the master
 			int procedure = 2;
 			if(patient_write(socket_fd, (void *)&procedure, sizeof(int)) < 0) {
@@ -140,8 +139,8 @@ int main() {
 				cout << "Error reading document count from master." << endl;
 				exit(1);
 			}
-			cout << "Document count from master was " << document_count << endl;
 			
+			cout << "Search matched ( " << document_count << " ) documents." << endl;
 			for(int i = 0; i < document_count; i++) {
 				int doc_name_len;
 				if(patient_read(socket_fd, (void *)&doc_name_len, sizeof(int)) < 0) {
@@ -154,7 +153,7 @@ int main() {
 					cout << "Error reading document name " << i << " from master." << endl;
 					exit(1);
 				}
-				cout << doc_name << ":" << endl;
+				cout << (i+1) << ") " << doc_name << ":" << endl;
 				delete[] doc_name;
 				
 				// Term counts array is padded in the front by one integer - ignore it

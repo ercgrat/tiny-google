@@ -159,12 +159,12 @@ void print_index(term_node *master) {
 	term_node *current = master;
 	while(current != NULL) {
 		freq_node *current_freq = current->list;
-		cout << current->term << ": ";
+		//cout << current->term << ": ";
 		while(current_freq != NULL) {
-			cout << "(" << current_freq->doc_id << ", " << current_freq->count << ")~> ";
+			//cout << "(" << current_freq->doc_id << ", " << current_freq->count << ")~> ";
 			current_freq = current_freq->next;
 		}
-		cout << endl;
+		//cout << endl;
 		current = current->next;
 	}
 }
