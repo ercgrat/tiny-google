@@ -11,6 +11,7 @@ struct helper_registration_request {
 struct helper_entry {
 	unsigned short port;
 	char ip_addr[INET_ADDRSTRLEN];
+	int dead;
 };
 
 struct helper_node {
@@ -26,5 +27,9 @@ struct index_thread_data {
 };
 
 struct search_thread_data {
+	int client_fd;
+};
+
+struct retrieve_thread_data {
 	int client_fd;
 };
